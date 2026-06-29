@@ -1,1 +1,1 @@
-export {Model} from './fir_model';
+export {Model, ModelRegistry} from './fir_model';

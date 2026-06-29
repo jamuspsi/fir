@@ -3,7 +3,7 @@ import moment from 'moment';
 const MroMap = new Map();
 const KeysMap = new Map();
 const PatchKeysMap = new Map();
-const ModelRegistry = new Map();
+export const ModelRegistry = new Map();
 const ChildClassMap = new Map();
 
 
@@ -159,6 +159,7 @@ export class Model {
                 default:
                     const model = ModelRegistry.get(kls);
                     if(!model) {
+                        console.error('Model registry keys are ', [...ModelRegistry.keys()]);
                         throw `Could not find a model for ${kls}, make sure it was registered.`;
                     }
                     return model.create_from_jsonable(pojo); 
