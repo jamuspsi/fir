@@ -8,7 +8,7 @@ export const UnresolvedSchemas = new Set();
 const ChildClassMap = new Map();
 
 const MetaSymbol = Symbol('ModelMeta');
-
+import {FirInterop} from './fir_interop';
 
 export class ModelMeta {
     model : Model;
@@ -250,40 +250,40 @@ export class ModelMeta {
             if(def.type === String) {
                 safe_setter = (inst, val)=>{
                     if(!(val instanceof Array)) {
-                        throw new Error(`When deserializing, cannot assign non-array ${val} to ${this.name}.${k}; it must be [${def.type.name}].`);
+                        throw new Error(`When deserializing, cannot assign non-array ${val} to ${this.name}.${field}; it must be [${def.type.name}].`);
                     }
                     if(!val.every(v=>v === null || typeof v === 'string')) {
-                        throw new Error(`When deserializing, cannot assign ${this.name}.${k} to ${val}; ; it must be [${def.type.name}].`);
+                        throw new Error(`When deserializing, cannot assign ${this.name}.${field} to ${val}; ; it must be [${def.type.name}].`);
                     }
                     inst[field] = val;
                 };
             } else if(def.type === Number) {
                 safe_setter = (inst, val)=>{
                     if(!(val instanceof Array)) {
-                        throw new Error(`When deserializing, cannot assign non-array ${val} to ${this.name}.${k}; it must be [${def.type.name}].`);
+                        throw new Error(`When deserializing, cannot assign non-array ${val} to ${this.name}.${field}; it must be [${def.type.name}].`);
                     }
                     if(!val.every(v=>v === null || typeof v === 'number')) {
-                        throw new Error(`When deserializing, cannot assign ${this.name}.${k} to ${val}; ; it must be [${def.type.name}].`);
+                        throw new Error(`When deserializing, cannot assign ${this.name}.${field} to ${val}; ; it must be [${def.type.name}].`);
                     }
                     inst[field] = val;
                 };
             } else if(def.type === BigInt) {
                 safe_setter = (inst, val)=>{
                     if(!(val instanceof Array)) {
-                        throw new Error(`When deserializing, cannot assign non-array ${val} to ${this.name}.${k}; it must be [${def.type.name}].`);
+                        throw new Error(`When deserializing, cannot assign non-array ${val} to ${this.name}.${field}; it must be [${def.type.name}].`);
                     }
                     if(!val.every(v=>v === null || typeof v === 'number' || typeof v === 'bigint')) {
-                        throw new Error(`When deserializing, cannot assign ${this.name}.${k} to ${val}; ; it must be [${def.type.name}].`);
+                        throw new Error(`When deserializing, cannot assign ${this.name}.${field} to ${val}; ; it must be [${def.type.name}].`);
                     }
                     inst[field] = val;
                 };
             } else if(def.type === Boolean) {
                 safe_setter = (inst, val)=>{
                     if(!(val instanceof Array)) {
-                        throw new Error(`When deserializing, cannot assign non-array ${val} to ${this.name}.${k}; it must be [${def.type.name}].`);
+                        throw new Error(`When deserializing, cannot assign non-array ${val} to ${this.name}.${field}; it must be [${def.type.name}].`);
                     }
                     if(!val.every(v=>v === null || typeof v === 'boolean' || v === 0 || v === 1)) {
-                        throw new Error(`When deserializing, cannot assign ${this.name}.${k} to ${val}; ; it must be [${def.type.name}].`);
+                        throw new Error(`When deserializing, cannot assign ${this.name}.${field} to ${val}; ; it must be [${def.type.name}].`);
                     }
                     for(let i = 0; i < val.length; i++) {
                         if(val[i] !== null) val[i] = !!val[i];
@@ -293,10 +293,10 @@ export class ModelMeta {
             } else {
                 safe_setter = (inst, val)=>{
                     if(!(val instanceof Array)) {
-                        throw new Error(`When deserializing, cannot assign non-array ${val} to ${this.name}.${k}; it must be [${def.type.name}].`);
+                        throw new Error(`When deserializing, cannot assign non-array ${val} to ${this.name}.${field}; it must be [${def.type.name}].`);
                     }
                     if(!val.every(v=>v === null || v instanceof def.type)) {
-                        throw new Error(`When deserializing, cannot assign ${this.name}.${k} to ${val}; ; it must be [${def.type.name}].`);
+                        throw new Error(`When deserializing, cannot assign ${this.name}.${field} to ${val}; ; it must be [${def.type.name}].`);
                     }
                     inst[field] = val;
                 };
@@ -306,35 +306,35 @@ export class ModelMeta {
             if(def.type === String) {
                 safe_setter = (inst, val)=>{
                     if(!(val === null || typeof val === 'string')) {
-                        throw new Error(`When deserializing, cannot assign ${this.name}.${k} to ${val}; ; it must be ${def.type.name}.`);
+                        throw new Error(`When deserializing, cannot assign ${this.name}.${field} to ${val}; ; it must be ${def.type.name}.`);
                     }
                     inst[field] = val;
                 };
             } else if(def.type === Number) {
                 safe_setter = (inst, val)=>{
                     if(!(val === null || typeof val === 'number')) {
-                        throw new Error(`When deserializing, cannot assign ${this.name}.${k} to ${val}; ; it must be ${def.type.name}.`);
+                        throw new Error(`When deserializing, cannot assign ${this.name}.${field} to ${val}; ; it must be ${def.type.name}.`);
                     }
                     inst[field] = val;
                 };
             } else if(def.type === BigInt) {
                 safe_setter = (inst, val)=>{
                     if(!(val === null || typeof val === 'number' || typeof val === 'bigint')) {
-                        throw new Error(`When deserializing, cannot assign ${this.name}.${k} to ${val}; ; it must be ${def.type.name}.`);
+                        throw new Error(`When deserializing, cannot assign ${this.name}.${field} to ${val}; ; it must be ${def.type.name}.`);
                     }
                     inst[field] = val;
                 };
             } else if(def.type === Boolean) {
                 safe_setter = (inst, val)=>{
                     if(!(val === null || typeof val === 'boolean' || val === 0 || val === 1)) {
-                        throw new Error(`When deserializing, cannot assign ${this.name}.${k} to ${val}; ; it must be ${def.type.name}.`);
+                        throw new Error(`When deserializing, cannot assign ${this.name}.${field} to ${val}; ; it must be ${def.type.name}.`);
                     }
                     inst[field] = val === null ? val : !!val;
                 };
             } else {
                 safe_setter = (inst, val)=>{
                     if(!(val === null || val instanceof def.type)) {
-                        throw new Error(`When deserializing, cannot assign ${this.name}.${k} to ${val}; ; it must be ${def.type.name}.`);
+                        throw new Error(`When deserializing, cannot assign ${this.name}.${field} to ${val}; ; it must be ${def.type.name}.`);
                     }
                     inst[field] = val;
                 };
@@ -436,110 +436,28 @@ export class Model {
         return this === Model ? null : Object.getPrototypeOf(this);
     }
 
-    static to_pojo(contract, val) {
-        if(val instanceof Model) {
-            return val = val.as_jsonable(contract);
-        } else if(val && val.constructor === Date) {
-            return {'__kls__': 'datetime', 'd': val.toISOString()};
-        } else if(val && moment.isMoment(val)) {
-            var date = val.toDate();
-            if(!date) return null;
-            return {'__kls__': 'datetime', 'd': val.toDate().toISOString()}
-        } else if(val && val instanceof Array) {
-            return val.map(x=>Model.to_pojo(contract, x));                
-        } else if(val instanceof Promise) {
-            return undefined;
-        } else if(val && typeof(val) == 'object') {
-            var cleaned = {};
-            for(const [subkey, subvalue] of Object.entries(val)) {
-                cleaned[subkey] = Model.to_pojo(contract, subvalue);
-            }
-            return cleaned;
-        } else if(typeof(val) === 'number' && (val % 1 || val > 2**31-1 || val < -(2**31))) {
-            return {'__kls__': 'Decimal', 'str': val.toString()};
-        } else if(Number.isNaN(val)) {
-            return null;
-        } else {
-            return val;
-        }
+    as_jsonable(contract='default') {
+        return new FirInterop.FirSerializer(contract, 'transport').as_jsonable(this);
     }
-    as_jsonable(contract) {
-        // layer = layer || 'transport';
-        const keys = this.__class__.__meta__.contracts.get(contract).transport.keys();
-        // const keys = this.__class__.__all_keys__;
-        const jsonable = {
-            "__kls__": this.__class__.name,
-        };
+    static create_from_jsonable(jsonable, contract='default') {
+        return new FirInterop.FirSerializer(contract, 'transport').create_from_jsonable(jsonable);
+    }
+    // update_from_jsonable(jsonable, contract='default') {
+    //     return new FirInterop.FirSerializer(contract, 'transport').create_from_jsonable(jsonable);
+    // }
+    static from_pojo(pojo, contract='default') {
+        return new FirInterop.FirSerializer(contract, 'transport').from_pojo(pojo);
+    }
+    dumps(contract='default') {
+        return new FirInterop.FirSerializer(contract, 'transport').dumps(this);
+    }
+    static dumps(inst, contract='default') {
+        return new FirInterop.FirSerializer(contract, 'transport').dumps(inst);
+    }
+    static loads(json, contract='default') {
+        return new FirInterop.FirSerializer(contract, 'transport').loads(json);
+    }
 
-        for(var k of keys) {
-            // console.log(k);
-            var val = this[k];
-            val = Model.to_pojo(contract, val);
-            jsonable[k] = val;
-        }
-        return jsonable;
-    }
-    static from_pojo(contract, pojo) {
-        if(pojo instanceof Array) {
-            // this implicitly means that all arrays are always copied.
-            return pojo.map(sub_pojo=>Model.from_pojo(contract, sub_pojo));
-        } else if(pojo && typeof pojo === 'object') {
-            const kls = pojo.__kls__;
-            switch(kls) {
-                case null:
-                case undefined:
-                    // and here, all {} objects are always copied.
-                    var rehydrated = {}
-                    for(const [subkey, subvalue] of Object.entries(pojo)) {
-                        rehydrated[subkey] = Model.from_pojo(contract, subvalue);
-                    }
-                    return rehydrated;
-                case 'Decimal':
-                    return Number(pojo.str) || null;
-                case 'datetime':
-                    return new moment(pojo.d) || null;
-                default:
-                    const model = ModelRegistry.get(kls);
-                    if(!model) {
-                        console.error('Model registry keys are ', [...ModelRegistry.keys()]);
-                        throw `Could not find a model for ${kls}, make sure it was registered.`;
-                    }
-                    return model.create_from_jsonable(contract, pojo); 
-            }
-        } else {
-            return pojo;
-        }
-    }
-    static create_from_jsonable(contract, jsonable) {
-        var inst = new this();
-
-        if(this.__meta__.unresolved_schema) {
-            throw new Error(`Cannot deserialize a ${this.name} while the schema is unresolved.`)
-        }
-
-        const contract_setters = this.__meta__.contracts.get(contract).transport;
-        for(const [k, setter] of contract_setters) {
-            // try to assign them in the data contract key order
-            // (other members of jsonable are ignored)
-            if(Object.hasOwn(jsonable, k)) {
-
-                let val = Model.from_pojo(contract, jsonable[k]);
-                // type safety check.
-                setter(inst, val);
-            }
-        }
-        return inst;
-    }
-    dumps(contract) {
-        return JSON.stringify(this.as_jsonable(contract));
-    }
-    static loads(contract, json) {
-        const jsonable = JSON.parse(json);
-        return Model.from_pojo(contract, jsonable);
-    }
-    clone() {
-        return Model.loads(this.dumps());
-    }
 
     as_patch(contract) {
 
@@ -555,7 +473,8 @@ export class Model {
 }
 Model.__register__();
 
-
+FirInterop.Model = Model;
+FirInterop.ModelRegistry = ModelRegistry;
 /* Okay.
 
 */
