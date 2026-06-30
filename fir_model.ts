@@ -42,6 +42,8 @@ export class ModelMeta {
         } else {
             this.schema = new Map();
         }
+        this.default_contract_tokens = [];
+
 
         // now write my own on.
         if(Object.hasOwn(this.model, '__schema__')) {
@@ -57,6 +59,17 @@ export class ModelMeta {
                     def = {type: def, field: field};
                 }
                 def.field = field;
+
+                if(def.field.startsWith('$')) {
+                    this.default_contract_tokens.push(def.field);
+                    def.field = def.field.substring(1);
+                    field = def.field;
+                } else if(def.field.startsWith('_')) {
+                    // implicitly delete it in case this schema is hiding a parent field
+                    this.default_contract_tokens.push('-' + def.field);
+                } else {
+                    this.default_contract_tokens.push(def.field);
+                }
 
                 if(def.type instanceof Array) {
                     // for now, arrays must be homogenous
@@ -134,13 +147,22 @@ export class ModelMeta {
     parse_contracts() {
         this.contracts = new Map();
         this.contract_recipes = new Map(); // name->['key', '$key', '-key', '*import']
-
         // recipes are first copied from the parent
         if(this.parent) {
             for(var [name, fields] of this.parent.__meta__.contract_recipes) {
                 this.contract_recipes.set(name, [...fields]);
             }
         }
+
+        // then we apply the default contracts from the schema
+        if(this.default_contract_tokens.length && !this.contract_recipes.has('default')) {
+            this.contract_recipes.set('default', []);                    
+        }
+        for(let token of this.default_contract_tokens) {
+            this.contract_recipes.get('default').push(token);
+        }
+
+
         // then this model's contracts are appended to the end of each recipe
         if(Object.hasOwn(this.model, '__contracts__')) {
             for(var [name, fields] of Object.entries(this.model.__contracts__)) {
@@ -414,7 +436,7 @@ export class Model {
         return this === Model ? null : Object.getPrototypeOf(this);
     }
 
-    static to_plain_pojo(contract, val) {
+    static to_pojo(contract, val) {
         if(val instanceof Model) {
             return val = val.as_jsonable(contract);
         } else if(val && val.constructor === Date) {
@@ -424,13 +446,13 @@ export class Model {
             if(!date) return null;
             return {'__kls__': 'datetime', 'd': val.toDate().toISOString()}
         } else if(val && val instanceof Array) {
-            return val.map(x=>Model.to_plain_pojo(contract, x));                
+            return val.map(x=>Model.to_pojo(contract, x));                
         } else if(val instanceof Promise) {
             return undefined;
         } else if(val && typeof(val) == 'object') {
             var cleaned = {};
             for(const [subkey, subvalue] of Object.entries(val)) {
-                cleaned[subkey] = Model.to_plain_pojo(contract, subvalue);
+                cleaned[subkey] = Model.to_pojo(contract, subvalue);
             }
             return cleaned;
         } else if(typeof(val) === 'number' && (val % 1 || val > 2**31-1 || val < -(2**31))) {
@@ -442,6 +464,7 @@ export class Model {
         }
     }
     as_jsonable(contract) {
+        // layer = layer || 'transport';
         const keys = this.__class__.__meta__.contracts.get(contract).transport.keys();
         // const keys = this.__class__.__all_keys__;
         const jsonable = {
@@ -451,7 +474,7 @@ export class Model {
         for(var k of keys) {
             // console.log(k);
             var val = this[k];
-            val = Model.to_plain_pojo(contract, val);
+            val = Model.to_pojo(contract, val);
             jsonable[k] = val;
         }
         return jsonable;
@@ -517,6 +540,11 @@ export class Model {
     clone() {
         return Model.loads(this.dumps());
     }
+
+    as_patch(contract) {
+
+    }
+
 
     static __keys__ = ['pk'];
     static __patchkeys__ = ['pk'];
