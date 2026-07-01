@@ -437,39 +437,56 @@ export class Model {
     }
 
     as_jsonable(contract='default') {
-        return new FirInterop.FirSerializer(contract, 'transport').as_jsonable(this);
+        return new FirInterop.FirSerializer(contract).as_jsonable(this, 'transport');
     }
     static create_from_jsonable(jsonable, contract='default') {
-        return new FirInterop.FirSerializer(contract, 'transport').create_from_jsonable(jsonable);
+        return new FirInterop.FirSerializer(contract).create_from_jsonable(this, jsonable, 'transport');
     }
     // update_from_jsonable(jsonable, contract='default') {
     //     return new FirInterop.FirSerializer(contract, 'transport').create_from_jsonable(jsonable);
     // }
     static from_pojo(pojo, contract='default') {
-        return new FirInterop.FirSerializer(contract, 'transport').from_pojo(pojo);
+        // overrides the default layer=null on FS.from_pojo because we're expecting
+        // models here.
+        return new FirInterop.FirSerializer(contract).from_pojo(pojo, 'transport');
+    }
+    static from_pojo_checked(pojo, contract='default') {
+        var inst = new FirInterop.FirSerializer(contract).from_pojo(pojo, 'transport');
+        if(inst !== null && (!(inst instanceof this))) {
+            throw new Error(`${this.name}.from_pojo deserialized an unexpected type.`, {expected: this, inst: inst});
+        }
+        return inst;    
     }
     dumps(contract='default') {
-        return new FirInterop.FirSerializer(contract, 'transport').dumps(this);
+        return new FirInterop.FirSerializer(contract).dumps(this, 'transport');
     }
     static dumps(inst, contract='default') {
-        return new FirInterop.FirSerializer(contract, 'transport').dumps(inst);
+        return new FirInterop.FirSerializer(contract).dumps(inst, 'transport');
     }
     static loads(json, contract='default') {
-        return new FirInterop.FirSerializer(contract, 'transport').loads(json);
+        return new FirInterop.FirSerializer(contract).loads(json, 'transport');
     }
 
 
-    as_patch(contract) {
+    as_patch(contract='default') {
+        return new FirInterop.FirSerializer(contract).as_patch(this);   
+    }
+
+    apply_patch(patch, contract='default') {
+        return new FirInterop.FirSerializer(contract).as_patch(this, patch);   
 
     }
 
-
-    static __keys__ = ['pk'];
-    static __patchkeys__ = ['pk'];
-
-    static __contracts__ = {
-        default: ['$pk'],
+    static __schema__ = {
+        $pk: Number,
     }
+
+    // static __keys__ = ['pk'];
+    // static __patchkeys__ = ['pk'];
+
+    // static __contracts__ = {
+    //     default: ['$pk'],
+    // }
 }
 Model.__register__();
 
