@@ -1,5 +1,12 @@
 import {FirInterop} from './fir_interop';
+import {FirError} from './fir_error';
+
 import moment from 'moment';
+
+var TPK_INCREMENTER = 1;
+// const TPK = Symbol.for('TPK');
+const TPK = '__tpk__';
+FirInterop.TPK = TPK;
 
 export class FirSerializer {
     constructor(contract) {
@@ -47,6 +54,9 @@ export class FirSerializer {
         const jsonable = {
             "__kls__": inst.__class__.name,
         };
+        if(layer == 'patch' && !inst.pk) {
+            jsonable['__tpk__'] = inst[TPK] = TPK_INCREMENTER++;
+        }
         
         for(var k of keys) {
             // console.log(k);
@@ -135,6 +145,162 @@ export class FirSerializer {
     apply_patch(inst, patch) {
         // always patch obviously
 
+        const contract_setters = inst.__class__.__meta__.contracts.get(this.contract).patch;
+        const this_schema = inst.__class__.__meta__.schema;
+
+        for(const [k, setter] of contract_setters) {
+            // try to assign them in the data contract key order
+            
+            if(!Object.hasOwn(patch, k)) {
+                // if the patch doesn't have it, skip it.
+                continue;
+            }
+            // get the subpatch.
+            let subpatch = patch[k];
+
+            let def = this_schema.get(k);
+
+            if(!def.is_model) {
+                // if this field isn't a model field,
+                // just set it safely, and move on.
+                var val = this.from_pojo(patch[k], 'patch'); // but rehydrate it in patch mode.
+                setter(inst, val);
+                continue;
+            }
+
+            // current value on this instance.
+            var current = inst[k];
+
+            if(!def.is_array) {
+                // single object.
+                if(current 
+                    && current.__class__ === FirInterop.ModelRegistry.get(subpatch.__kls__)
+                    && (current.pk === null || current.pk === subpatch.pk)) {
+                    // if the current object exists, is the right type,
+                    // and has no pk or a matching pk, then reuse it.
+                    this.apply_patch(current, subpatch);
+                    continue;
+                } else {
+                    // otherwise we need a new object.  The old object
+                    // can vanish.
+                    var new_object = this.from_pojo(subpatch, 'patch');
+                    setter(inst, new_object);
+                    continue;
+                }
+            } else {
+                if(!(subpatch instanceof Array)) {
+                    throw new Error(`Cannot patch ${inst.__class__.name}.${k} to a non-array`);
+                };
+                // Map the subpatch items to the current items.
+                let assoc = match_patch_list_to_instances(subpatch, current);
+
+                // construct a new list of items
+                var new_list = subpatch.map(subpatch_item=>{
+                    // reuse items if we found a match.
+                    var new_item = assoc.get(subpatch_item);
+                    if(new_item) {
+                        // apply the subpatch to the recycled item
+                        this.apply_patch(new_item, subpatch_item);
+                    } else {
+                        // construct a new item for the subpatch, wholesale (but still in patch context)
+                        new_item = this.from_pojo(subpatch_item, 'patch');
+                    }
+                    return new_item;
+                });
+                setter(inst, new_list);
+            }
+
+        }
+        return inst;
+
+
+    }
+}
+
+
+
+class TwoDimensionalMap {
+    #root = new Map();
+
+    set(key1, key2, value) {
+        let subMap = this.#root.get(key1);
+        if (!subMap) {
+            subMap = new Map();
+            this.#root.set(key1, subMap);
+        }
+        subMap.set(key2, value);
+        return this;
+    }
+
+    get(key1, key2) {
+        const subMap = this.#root.get(key1);
+        return subMap ? subMap.get(key2) : undefined;
+    }
+
+    has(key1, key2) {
+        const subMap = this.#root.get(key1);
+        return subMap ? subMap.has(key2) : false;
+    }
+
+    delete(key1, key2) {
+        const subMap = this.#root.get(key1);
+        if (!subMap) return false;
+        const deleted = subMap.delete(key2);
+        if (subMap.size === 0) {
+            this.#root.delete(key1);
+        }
+        return deleted;
+    }
+}
+
+function match_patch_list_to_instances(patches, instances) {
+    // index existing instances by pk if they have one
+    const kls_cache = new Map();
+    for(var patch of patches) {
+        if(!patch.__kls__) {
+            throw new FirError("Cannot match a patch/sync object to a known class because it has no __kls__", {patch})
+        }
+        var cls = FirInterop.ModelRegistry.get(patch.__kls__);
+        if(!cls) {
+            throw new FirError("Cannot match a patch/sync object to a known class because __kls__ is unregistered", {patch})
+        }
+        kls_cache.set(patch.__kls__, cls);
+    }
+
+    const by_pk = new TwoDimensionalMap();
+
+    instances.filter(i=>i.pk).forEach(i=>{by_pk.set(i.__class__ , i.pk, i)});
+
+    // tpk is an ephemeral id created via as_patch on null-pk
+    // objects, for cases where the backend is going to create a pk.
+    // it's used to associate patches/syncs when the objects don't yet
+    // have a backend-assigned pk.
+    // index existing instances by tpk if they have one.
+    const by_tpk = new TwoDimensionalMap();
+    instances.filter(i=>(i.pk === null || i.pk === undefined) && i[TPK])
+    .forEach(i=>{by_tpk.set(i.__class__, i[TPK], i)});
+
+    // the mapping we're finding.
+    const assoc = new Map();
+
+    for(var patch of patches) {
+        var pcls = kls_cache.get(patch.__kls__);
+        var match = patch.pk ? by_pk.get(pcls, patch.pk) : null;
+        if(!match && patch.__tpk__) {
+            match = by_tpk.get(pcls, patch.__tpk__);
+        }
+        if(match) {
+            // found a good match.
+            assoc.set(patch, match);
+        }
+    }
+
+    return assoc;
+}
+
+FirInterop.FirSerializer = FirSerializer;
+
+
         // okay.  The tricky thing here is when we're setting
         // subpatches.  
         // technically, ONLY model instances can be patched like this.
@@ -154,13 +320,6 @@ export class FirSerializer {
         // as an assignment, and it wouldn't get rehydrated, right?
         // Yeah.  Okay.
 
-        const contract_setters = inst.__class__.__meta__.contracts.get(this.contract).patch;
-        for(const [k, setter] of contract_setters) {
-            // try to assign them in the data contract key order
-            // (other members of jsonable are ignored)
-            if(Object.hasOwn(patch, k)) {
-
-                let val = this.from_pojo(patch[k], 'patch'); // won't rehydrate
 
                 // what are our options now?
                 // single model instance, has matching/null pk: update that instance
@@ -185,16 +344,6 @@ export class FirSerializer {
                 // if patching a fresh object on.  
 
 
-                setter(inst, val);
-            }
-        }
-        return inst;
-
-
-    }
-}
-
-FirInterop.FirSerializer = FirSerializer;
 
 /*
     What happens if I loads() some payload and it ends up having a patch?
@@ -297,7 +446,9 @@ It effectively just uses apply_patch.
 Convenience methods- I think these strictly do the layer stuff we expect.
 If you want to serialize differently, get a serializer.
 
+Can you patch arbitrary shapes?  Like coordinates that aren't a model.
 
+No.  You can't patch anything you don't have a contract for.
 
 
 

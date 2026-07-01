@@ -97,6 +97,10 @@ export class ModelMeta {
                     throw new Error(`Schema error for ${this.model.name}.${field}: type does not seem to be a type with prototype, it's ${def.type}`);
                 }
 
+                if(Model.isPrototypeOf(def.type)) {
+                    def.is_model = true;
+                }
+
                 this.schema.set(field, def);
                 // now construct a setter function for this field.
                 let safe_setter = this.create_safe_setter(def);
@@ -125,6 +129,10 @@ export class ModelMeta {
                 if(def.unresolved && def.type == name) {
                     // resolve this one.
                     def.type = this.model;
+                    if(Model.isPrototypeOf(def.type)) {
+                        def.is_model = true;
+                    }
+
                     delete def.unresolved;
 
                     resolved_some = true;
@@ -349,6 +357,13 @@ export class Model {
 
     constructor() {
         this.pk = null;
+        Object.defineProperty(this, FirInterop.TPK, {
+            value: null,
+            enumerable: false,
+            configurable: true,
+            writable: true
+        });
+
     }
     // get obs() {
     //     return this[ObsStoreSymbol];
@@ -473,7 +488,7 @@ export class Model {
     }
 
     apply_patch(patch, contract='default') {
-        return new FirInterop.FirSerializer(contract).as_patch(this, patch);   
+        return new FirInterop.FirSerializer(contract).apply_patch(this, patch);   
 
     }
 
