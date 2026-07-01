@@ -3,10 +3,11 @@ import {FirError} from './fir_error';
 
 import moment from 'moment';
 
-var TPK_INCREMENTER = 1;
+// var TPK_INCREMENTER = 1;
 // const TPK = Symbol.for('TPK');
 const TPK = '__tpk__';
 FirInterop.TPK = TPK;
+FirInterop.TPK_INCREMENTER = 1;
 
 export class FirSerializer {
     constructor(contract) {
@@ -55,7 +56,7 @@ export class FirSerializer {
             "__kls__": inst.__class__.name,
         };
         if(layer == 'patch' && !inst.pk) {
-            jsonable['__tpk__'] = inst[TPK] = TPK_INCREMENTER++;
+            jsonable['__tpk__'] = inst[TPK];
         }
         
         for(var k of keys) {
@@ -212,7 +213,82 @@ export class FirSerializer {
 
         }
         return inst;
+    }
+    sync_to_instance(target, source) {
+        if(!(target instanceof FirInterop.Model)) {
+            throw new FirError(`sync_to_instance target must be a fir.Model instance`, {target: target, source: source, contract: this.contract});
+        }
+        if(!(source instanceof FirInterop.Model)) {
+            throw new FirError(`sync_to_instance source must be a fir.Model instance`, {target: target, source: source, contract: this.contract});
+        }
+        if(target.__class__ !== source.__class__) {
+            throw new FirError(`sync_to_instance target and source must be instances of the same class`, {target: target, source: source, contract: this.contract});
+        }
 
+        const contract_setters = target.__class__.__meta__.contracts.get(this.contract).transport;
+        const this_schema = target.__class__.__meta__.schema;
+
+        for(const [k, setter] of contract_setters) {
+            // try to assign them in the data contract key order
+            
+            if(!Object.hasOwn(source, k)) {
+                // if the source doesn't have it (somehow?), skip it.
+                continue;
+            }
+            // get the new value
+            let fieldval = source[k];
+
+            let def = this_schema.get(k);
+
+            if(!def.is_model) {
+                // if this field isn't a model field,
+                // just set it safely, and move on.
+                setter(target, fieldval);
+                continue;
+            }
+
+            // current value on this instance.
+            var current = target[k];
+
+            if(!def.is_array) {
+                // single object.
+                if(current 
+                    && current.__class__ === fieldval.__class__
+                    && (current.pk === null || current.pk === fieldval.pk)) {
+                    // if the current object exists, is the right type,
+                    // and has no pk or a matching pk, then sync it.
+                    this.sync_to_instance(current, fieldval);
+                    continue;
+                } else {
+                    // otherwise just assign the new object from source.
+                    setter(target, fieldval);
+                    continue;
+                }
+            } else {
+                if(!(fieldval instanceof Array)) { // somehow?
+                    throw new FirError(`Cannot sync ${target.__class__.name}.${k} to a non-array`, {target, source, field:k, value:fieldval});
+                };
+                // Map the syncing items to the current items
+                let assoc = match_instances(fieldval, current);
+
+                // construct a new list of items
+                var new_list = fieldval.map(sync_item=>{
+                    // reuse items if we found a match.
+                    var new_item = assoc.get(sync_item);
+                    if(new_item) {
+                        // apply the subpatch to the recycled item
+                        this.sync_to_instance(new_item, sync_item);
+                    } else {
+                        // we couldn't find a match, so just use the sync item
+                        new_item = sync_item;
+                    }
+                    return new_item;
+                });
+                setter(target, new_list);
+            }
+
+        }
+        return target;
 
     }
 }
@@ -297,6 +373,50 @@ function match_patch_list_to_instances(patches, instances) {
 
     return assoc;
 }
+
+function match_instances(sync_items, current_instances) {
+    // index existing instances by pk if they have one
+    if(!sync_items.every(item=>item instanceof FirInterop.Model)) {
+        throw new FirError('Cannot sync instance lists because the sync items are not all model instances.', {sync_items});
+    }
+    if(!(current_instances instanceof Array)) {
+        throw new FirError('Cannot sync instance lists because the current items are not an array', {current_instances});
+    }
+    if(!current_instances.every(item=>item instanceof FirInterop.Model)) {
+        throw new FirError('Cannot sync instance lists because the current items are not all model instances', {current_instances});
+    }
+
+    const by_pk = new TwoDimensionalMap();
+
+    current_instances.filter(i=>i.pk).forEach(i=>{by_pk.set(i.__class__ , i.pk, i)});
+
+    // tpk is an ephemeral id created via as_patch on null-pk
+    // objects, for cases where the backend is going to create a pk.
+    // it's used to associate patches/syncs when the objects don't yet
+    // have a backend-assigned pk.
+    // index existing current_instances by tpk if they have one.
+    const by_tpk = new TwoDimensionalMap();
+    current_instances.filter(i=>(i.pk === null || i.pk === undefined) && i[TPK])
+    .forEach(i=>{by_tpk.set(i.__class__, i[TPK], i)});
+
+    // the mapping we're finding.
+    const assoc = new Map();
+
+    for(var item of sync_items) {
+        var pcls = item.__class__;
+        var match = item.pk ? by_pk.get(pcls, item.pk) : null;
+        if(!match && item[TPK]) {
+            match = by_tpk.get(pcls, item[TPK]);
+        }
+        if(match) {
+            // found a good match.
+            assoc.set(item, match);
+        }
+    }
+
+    return assoc;
+}
+
 
 FirInterop.FirSerializer = FirSerializer;
 

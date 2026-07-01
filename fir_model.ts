@@ -9,6 +9,8 @@ const ChildClassMap = new Map();
 
 const MetaSymbol = Symbol('ModelMeta');
 import {FirInterop} from './fir_interop';
+import {FirError} from './fir_error';
+
 
 export class ModelMeta {
     model : Model;
@@ -358,7 +360,7 @@ export class Model {
     constructor() {
         this.pk = null;
         Object.defineProperty(this, FirInterop.TPK, {
-            value: null,
+            value: FirInterop.TPK_INCREMENTER++,
             enumerable: false,
             configurable: true,
             writable: true
@@ -485,23 +487,27 @@ export class Model {
 
     as_patch(contract='default') {
         return new FirInterop.FirSerializer(contract).as_patch(this);   
-    }
+    }   
 
     apply_patch(patch, contract='default') {
         return new FirInterop.FirSerializer(contract).apply_patch(this, patch);   
 
     }
 
+    static get_serializer(contract='default') {
+        return new FirInterop.FirSerializer(contract);
+    }
+
+    sync_to_instance(from, contract='default') {
+        return new FirInterop.FirSerializer(contract).sync_to_instance(this, from);
+    }
+
+
     static __schema__ = {
         $pk: Number,
     }
 
-    // static __keys__ = ['pk'];
-    // static __patchkeys__ = ['pk'];
-
-    // static __contracts__ = {
-    //     default: ['$pk'],
-    // }
+  
 }
 Model.__register__();
 
